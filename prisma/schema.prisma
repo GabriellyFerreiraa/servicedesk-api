@@ -1,0 +1,110 @@
+// Service Desk API — data model
+// PostgreSQL + Prisma
+//
+// SECURITY NOTE (the lesson from the previous project):
+// Roles are NOT a column on User. They live in a separate `UserRole` table.
+// A user can update their own profile (name, etc.) but can NEVER assign
+// themselves a role, because role changes only happen through the
+// admin-only endpoints that write to `UserRole`. This removes the
+// privilege-escalation path that a "role column on the profile" creates.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN     // manages users and role assignments
+  AGENT     // support analyst: sees, assigns and resolves any ticket
+  REQUESTER // end user: creates and follows only their own tickets
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // A user can hold one or more roles. This is the ONLY source of truth
+  // for authorization. Never trust a role sent from the client.
+  roles UserRole[]
+
+  // A user is the requester of many tickets...
+  requestedTickets Ticket[] @relation("RequestedTickets")
+  // ...and can be the assigned agent of many others.
+  assignedTickets  Ticket[] @relation("AssignedTickets")
+
+  comments Comment[]
+}
+
+// Separate roles table = no privilege escalation.
+// Writes to this table are only allowed from admin-guarded endpoints.
+model UserRole {
+  id     String @id @default(uuid())
+  userId String
+  role   Role
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A user cannot have the same role twice.
+  @@unique([userId, role])
+  @@index([userId])
+}
+
+model Ticket {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  category    String? // e.g. "hardware", "software", "access"
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  requesterId String
+  requester   User   @relation("RequestedTickets", fields: [requesterId], references: [id])
+
+  assigneeId String?
+  assignee   User?   @relation("AssignedTickets", fields: [assigneeId], references: [id])
+
+  comments Comment[]
+
+  // Indexes on the columns we filter/sort by most often.
+  @@index([status])
+  @@index([requesterId])
+  @@index([assigneeId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+}

@@ -1,0 +1,31 @@
+### Service Desk API — quick tests
+### Requires the VS Code extension "REST Client" (id: humao.rest-client).
+### Click "Send Request" above each block.
+
+@baseUrl = http://localhost:3000
+
+### 1. Health
+GET {{baseUrl}}/health
+
+### 2. Register a new user (gets a token + REQUESTER role)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Gabrielly",
+  "email": "gabi@test.com",
+  "password": "password123"
+}
+
+### 3. Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "gabi@test.com",
+  "password": "password123"
+}
+
+### 4. Me — paste the token from step 2 or 3 after "Bearer "
+GET {{baseUrl}}/auth/me
+Authorization: Bearer PASTE_YOUR_TOKEN_HERE
